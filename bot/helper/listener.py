@@ -19,7 +19,7 @@ from bot.helper.mirror_utils.status_utils.tg_upload_status import TgUploadStatus
 from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
 from bot.helper.mirror_utils.upload_utils.pyrogramEngine import TgUploader
-from bot.helper.mirror_utils.rclone_utils.rclone_transfer import RcloneTransferHelper
+from bot.helper.mirror_utils.rclone_utils.transfer import RcloneTransferHelper
 from bot.helper.telegram_helper.message_utils import sendMessage, delete_all_messages, update_all_messages
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.ext_utils.db_handler import DbManger
@@ -271,7 +271,7 @@ class MirrorLeechListener:
             LOGGER.info(f"Upload Name: {up_name}")
             await RcloneTransferHelper(self, up_name, size, gid).upload(path)
 
-    async def onUploadComplete(self, link, size, files, folders, typ, name, isRclone=False):
+    async def onUploadComplete(self, link, size, files, folders, typ, name, rclonePath=''):
         if self.isSuperGroup and config_dict['INCOMPLETE_TASK_NOTIFIER'] and DATABASE_URL:
             await DbManger().rm_complete_task(self.message.link)
         msg = f"<b>Name: </b><code>{escape(name)}</code>\n\n<b>Size: </b>{get_readable_file_size(size)}"
@@ -306,11 +306,32 @@ class MirrorLeechListener:
             if typ == "Folder":
                 msg += f'\n<b>SubFolders: </b>{folders}'
                 msg += f'\n<b>Files: </b>{files}'
-            if not link.startswith('Path:'):
+            if link or rclonePath and config_dict['RCLONE_SERVE_URL']:
                 buttons = ButtonMaker()
-                buttons.ubutton("☁️ Cloud Link", link)
+                if link:
+                    buttons.ubutton("☁️ Cloud Link", link)
+                else:
+                    msg += f'\n\nPath: <code>{rclonePath}</code>'
+                if rclonePath and (RCLONE_SERVE_URL := config_dict['RCLONE_SERVE_URL']):
+                    remote, path = rclonePath.split(':', 1)
+                    url_path = rutils.quote(f'{path}')
+                    share_url = f'{RCLONE_SERVE_URL}/{remote}/{url_path}'
+                    buttons.ubutton("🔗 Rclone Link", share_url)
+                elif (INDEX_URL := config_dict['INDEX_URL']) and not rclonePath:
+                    url_path = rutils.quote(f'{name}')
+                    share_url = f'{INDEX_URL}/{url_path}'
+                    if typ == "Folder":
+                        share_url += '/'
+                        buttons.ubutton("⚡ Index Link", share_url)
+                    else:
+                        buttons.ubutton("⚡ Index Link", share_url)
+                        if config_dict['VIEW_LINK']:
+                            share_urls = f'{INDEX_URL}/{url_path}?a=view'
+                            buttons.ubutton("🌐 View Link", share_urls)
+                button = buttons.build_menu(2)
             else:
-                msg += f'\nPath: <code>{link}</code>'
+                msg += f'\n\nPath: <code>{rclonePath}</code>'
+                button = None
             msg += f'\n\n<b>cc: </b>{self.tag}'
             if (INDEX_URL := config_dict['INDEX_URL']) and not isRclone:
                 url_path = rutils.quote(f'{name}')
@@ -334,7 +355,7 @@ class MirrorLeechListener:
                         non_queued_up.remove(self.uid)
                 await start_from_queued()
                 return
-            
+
         await clean_download(self.dir)
         async with download_dict_lock:
             if self.uid in download_dict.keys():
