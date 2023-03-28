@@ -80,7 +80,7 @@ class RcloneTransferHelper:
         if self.__is_cancelled:
             return
         if code not in [0, -9]:
-            await self.__listener.onDownloadError(f'while getting rclone size. Path: {rc_path}. Stderr: {err}')
+            await self.__listener.onDownloadError(f'while getting rclone stat. Path: {rc_path}. Stderr: {err}')
             return
         rdict = loads(res)
         self.size = rdict['bytes']
