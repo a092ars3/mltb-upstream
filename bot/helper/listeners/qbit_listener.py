@@ -45,12 +45,13 @@ async def __onSeedFinish(client, tor):
 @new_task
 async def __stop_duplicate(client, tor):
     download = await getDownloadByGid(tor.hash[:12])
-    if hasattr(download, 'listener'):
-        listener = download.listener()
-        name = tor.content_path.rsplit('/', 1)[-1].rsplit('.!qB', 1)[0]
-        msg, button = await stop_duplicate_check(name, listener)
-        if msg:
-            __onDownloadError(client, msg, tor, button)
+    if not hasattr(download, 'listener'):
+        return
+    listener = download.listener()
+    name = tor.content_path.rsplit('/', 1)[-1].rsplit('.!qB', 1)[0]
+    msg, button = await stop_duplicate_check(name, listener)
+    if msg:
+        __onDownloadError(msg, tor, button)
 
 
 @new_task
